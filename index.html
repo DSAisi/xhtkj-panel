@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XHTKJ 连接台</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", sans-serif; max-width: 520px; margin: 0 auto; padding: 16px; background: #1c1b22; color: #eee; }
+  h1 { font-size: 18px; }
+  .card { background: #2a2933; border-radius: 12px; padding: 16px; margin: 12px 0; }
+  button { background: #6c5ce7; color: #fff; border: 0; border-radius: 10px; padding: 12px 18px; font-size: 16px; width: 100%; margin: 6px 0; }
+  button:disabled { opacity: .45; }
+  .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+  input[type=range] { flex: 1; }
+  #log { background: #141318; border-radius: 8px; padding: 10px; font: 12px/1.5 monospace; height: 150px; overflow-y: auto; white-space: pre-wrap; }
+  .big { font-size: 20px; font-weight: 700; }
+  .dim { color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>XHTKJ 连接台</h1>
+<div class="dim">只在 Bluefy 里打开 · 最高 20%</div>
+
+<div class="card">
+  <button id="btnConnect">① 连接趴趴熊</button>
+  <div id="status" class="dim" style="margin-top:8px">未连接</div>
+  <div id="devInfo" class="dim"></div>
+</div>
+
+<div class="card" style="opacity:.6; pointer-events:none" id="controlCard">
+  <div class="row">
+    <span>强度</span>
+    <input type="range" id="strength" min="0" max="100" value="0" step="1" disabled>
+    <span id="pct" class="big">0%</span>
+  </div>
+  <button id="btnSend">发送强度</button>
+  <button id="btnStop" style="background:#c0392b">停止</button>
+</div>
+
+<div class="card">
+  <div class="dim">日志</div>
+  <div id="log"></div>
+</div>
+
+<script>
+"use strict";
+const AD = "0000d34e-0000-1000-8000-00805f9b34fb";
+const SVC = "0000ff10-0000-1000-8000-00805f9b34fb";
+const WRITE = "0000ff12-0000-1000-8000-00805f9b34fb";
+const NOTIFY = "0000ff11-0000-1000-8000-00805f9b34fb";
+const PROD = "00002a50-0000-1000-8000-00805f9b34fb";
+const MAX = 20; // 安全上限 20%
+
+const logEl = document.getElementById("log");
+const statusEl = document.getElementById("status");
+const devEl = document.getElementById("devInfo");
+const ctl = document.getElementById("controlCard");
+const slider = document.getElementById("strength");
+const pctEl = document.getElementById("pct");
+const btnConnect = document.getElementById("btnConnect");
+const btnSend = document.getElementById("btnSend");
+const btnStop = document.getElementById("btnStop");
+
+function log(s){ logEl.textContent += new Date().toTimeString().slice(0,8) + " " + s + "\n"; logEl.scrollTop = logEl.scrollHeight; }
+function u16(v){ return [v & 0xFF, (v >> 8) & 0xFF]; }
+function cmdPkt(cmd, param){ const p = new Uint8Array(20); p[0]=0x03; p[1]=0x12; p[2]=cmd; if (param !== undefined) p[3]=param; return p; }
+const INIT = cmdPkt(0xF6, 0);
+const STOP = cmdPkt(0);
+function encStr(scale, pid){
+  scale = Math.max(0, Math.min(1, scale));
+  if (scale === 0) return 0;
+  let a = pid === 4 ? 0.8*scale+0.2 : (pid===1||pid===3) ? 0.6*scale+0.4 : 0.7*scale+0.3;
+  return ((Math.floor(1023*a) << 6) | 60) >>> 0;
+}
+function strengthPkt(p, pid){
+  const buf = Array.from(cmdPkt(0xF3));
+  const v = encStr(p, pid);
+  const put = (off, val) => { buf[off] = val & 0xFF; buf[off+1] = (val >> 8) & 0xFF; };
+  for (const base of [3, 11]) {
+    put(base, 64512);
+    put(base+2, 65024);
+    put(base+4, 320);
+    put(base+6, v);
+  }
+  return new Uint8Array(buf);
+}
+function setStrengthPct(p){ pctEl.textContent = p + "%"; }
+
+let device = null, server = null, writeChar = null, productId = null;
+
+btnConnect.onclick = async () => {
+  if (!navigator.bluetooth) { log("此浏览器不支持 Web Bluetooth"); statusEl.textContent = "浏览器不支持"; return; }
+  try {
+    log("请求设备…");
+    device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,          // 测试页能扫到 XHTKJ 就是靠这个（不按服务过滤）
+      optionalServices: [SVC, PROD]
+    });
+    log("设备: " + (device.name || "(无名字)"));
+    device.addEventListener("gattserverdisconnected", () => { log("已断开"); statusEl.textContent = "已断开"; ctl.style.opacity = .6; ctl.style.pointerEvents = "none"; });
+    log("连接 GATT…");
+    server = await device.gatt.connect();
+    const svc = await server.getPrimaryService(SVC);
+    writeChar = await svc.getCharacteristic(WRITE);
+    try {
+      const prod = await svc.getCharacteristic(PROD);
+      const buf = await prod.readValue();
+      productId = buf.getUint16(0, true);
+      log("产品信息 ID: " + productId);
+    } catch (e) { log("读产品信息失败(可能不支持): " + e.message); }
+    log("发初始化…");
+    await writeChar.writeValue(INIT);
+    log("初始化完成 ✓");
+    statusEl.textContent = "已连接 ✓";
+    devEl.textContent = "Name: " + (device.name || "?") + " | ProductID: " + (productId ?? "未知");
+    ctl.style.opacity = 1; ctl.style.pointerEvents = "auto";
+    slider.disabled = false;
+  } catch (e) { log("连接失败: " + e.message); statusEl.textContent = "失败"; }
+};
+
+slider.oninput = () => setStrengthPct(slider.value);
+btnSend.onclick = async () => {
+  if (!writeChar) return;
+  const p = Number(slider.value) / 100 * MAX / 100;
+  try { await writeChar.writeValue(strengthPkt(p, productId)); log("强度 → " + slider.value + "%"); }
+  catch (e) { log("发送失败: " + e.message); }
+};
+btnStop.onclick = async () => {
+  if (!writeChar) return;
+  try { await writeChar.writeValue(STOP); slider.value = 0; setStrengthPct(0); log("停止"); }
+  catch (e) { log("停止失败: " + e.message); }
+};
+log("页面就绪。点『连接趴趴熊』开始。");
+</script>
+</body>
+</html>
