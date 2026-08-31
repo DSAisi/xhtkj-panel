@@ -2,44 +2,109 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>XHTKJ 连接台</title>
 <style>
-  body { font-family: -apple-system, "PingFang SC", sans-serif; max-width: 520px; margin: 0 auto; padding: 16px; background: #1c1b22; color: #eee; }
-  h1 { font-size: 18px; }
-  .card { background: #2a2933; border-radius: 12px; padding: 16px; margin: 12px 0; }
-  button { background: #6c5ce7; color: #fff; border: 0; border-radius: 10px; padding: 12px 18px; font-size: 16px; width: 100%; margin: 6px 0; }
-  button:disabled { opacity: .45; }
-  .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
-  input[type=range] { flex: 1; }
-  #log { background: #141318; border-radius: 8px; padding: 10px; font: 12px/1.5 monospace; height: 150px; overflow-y: auto; white-space: pre-wrap; }
-  .big { font-size: 20px; font-weight: 700; }
-  .dim { color: #999; font-size: 13px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "SF Pro Text", sans-serif;
+    min-height: 100vh;
+    background: linear-gradient(160deg, #141b2e 0%, #1d2440 45%, #2a1f3d 100%);
+    color: #e8e6f2;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 28px 18px 40px;
+    position: relative; overflow-x: hidden;
+  }
+  .stars { position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      radial-gradient(1px 1px at 12% 22%, rgba(255,255,255,.7), transparent),
+      radial-gradient(1px 1px at 68% 12%, rgba(255,255,255,.5), transparent),
+      radial-gradient(1.5px 1.5px at 85% 38%, rgba(255,255,255,.6), transparent),
+      radial-gradient(1px 1px at 30% 68%, rgba(255,255,255,.45), transparent),
+      radial-gradient(1.2px 1.2px at 55% 82%, rgba(255,255,255,.55), transparent),
+      radial-gradient(1px 1px at 92% 70%, rgba(255,255,255,.4), transparent),
+      radial-gradient(1.4px 1.4px at 8% 88%, rgba(255,255,255,.5), transparent);
+  }
+  .wrap { position: relative; z-index: 1; width: 100%; max-width: 430px; }
+  .moon { width: 52px; height: 52px; border-radius: 50%; margin: 6px auto 10px;
+    background: radial-gradient(circle at 35% 30%, #fff7e0, #ffd98a 55%, #e8b55e);
+    box-shadow: 0 0 34px 8px rgba(255, 214, 140, .35); }
+  h1 { font-size: 22px; font-weight: 600; text-align: center; letter-spacing: 1px; }
+  .sub { text-align: center; color: #9a93b8; font-size: 12.5px; margin: 6px 0 22px; }
+  .card { background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.09);
+    border-radius: 20px; padding: 20px; margin: 0 0 16px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 10px 34px rgba(0,0,0,.35); }
+  .btn { width: 100%; border: 0; border-radius: 14px; padding: 15px; font-size: 16px; font-weight: 600;
+    color: #fff; background: linear-gradient(135deg, #ff9a5c, #ff6b81);
+    box-shadow: 0 8px 22px rgba(255,107,129,.32); transition: transform .12s, opacity .2s;
+    -webkit-tap-highlight-color: transparent; }
+  .btn:active { transform: scale(.97); }
+  .btn.blue { background: linear-gradient(135deg, #5cb8ff, #6c5ce7); box-shadow: 0 8px 22px rgba(108,92,231,.3); }
+  .btn.gray { background: linear-gradient(135deg, #3a3f55, #2c3042); box-shadow: none; }
+  .btn:disabled { opacity: .4; pointer-events: none; }
+  .status { text-align: center; margin-top: 14px; font-size: 14.5px; min-height: 20px; }
+  .status.on { color: #7be3a0; font-weight: 600; }
+  .devinfo { text-align: center; color: #9a93b8; font-size: 12px; margin-top: 6px; word-break: break-all; }
+  .strength-row { display: flex; align-items: center; gap: 14px; margin: 18px 0 16px; }
+  .ring { width: 64px; height: 64px; flex-shrink: 0; position: relative; }
+  .ring svg { width: 64px; height: 64px; transform: rotate(-90deg); }
+  .ring .track { stroke: rgba(255,255,255,.12); }
+  .ring .bar { stroke: url(#grad); stroke-linecap: round; transition: stroke-dashoffset .15s; }
+  .ring .num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 17px; font-weight: 700; }
+  .slide { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px;
+    background: linear-gradient(90deg, #ff9a5c, #ff6b81); outline: none; }
+  .slide::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; border: 5px solid #ff6b81; box-shadow: 0 3px 10px rgba(0,0,0,.4); }
+  .btns { display: flex; gap: 12px; }
+  .logbox { background: rgba(0,0,0,.28); border-radius: 14px; padding: 12px;
+    font: 11.5px/1.65 ui-monospace, Menlo, monospace; height: 128px; overflow-y: auto;
+    white-space: pre-wrap; color: #b9b3d1; }
+  .foot { text-align: center; color: #6f6890; font-size: 11.5px; margin-top: 8px; }
 </style>
 </head>
 <body>
-<h1>XHTKJ 连接台</h1>
-<div class="dim">只在 Bluefy 里打开 · 最高 20%</div>
+<div class="stars"></div>
+<div class="wrap">
+  <div class="moon"></div>
+  <h1>XHTKJ 连接台</h1>
+  <div class="sub">窗台边的小房间 · 只给一个人用</div>
 
-<div class="card">
-  <button id="btnConnect">① 连接趴趴熊</button>
-  <div id="status" class="dim" style="margin-top:8px">未连接</div>
-  <div id="devInfo" class="dim"></div>
-</div>
-
-<div class="card" style="opacity:.6; pointer-events:none" id="controlCard">
-  <div class="row">
-    <span>强度</span>
-    <input type="range" id="strength" min="0" max="100" value="0" step="1" disabled>
-    <span id="pct" class="big">0%</span>
+  <div class="card">
+    <button class="btn" id="btnConnect">连接趴趴熊</button>
+    <div class="status" id="status">未连接</div>
+    <div class="devinfo" id="devInfo"></div>
   </div>
-  <button id="btnSend">发送强度</button>
-  <button id="btnStop" style="background:#c0392b">停止</button>
-</div>
 
-<div class="card">
-  <div class="dim">日志</div>
-  <div id="log"></div>
+  <div class="card" id="controlCard" style="opacity:.5; filter:grayscale(.8); pointer-events:none">
+    <div class="strength-row">
+      <div class="ring">
+        <svg viewBox="0 0 64 64">
+          <defs>
+            <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#ff9a5c"/><stop offset="100%" stop-color="#ff6b81"/>
+            </linearGradient>
+          </defs>
+          <circle class="track" cx="32" cy="32" r="27" stroke-width="7" fill="none"/>
+          <circle class="bar" cx="32" cy="32" r="27" stroke-width="7" fill="none"
+            stroke-dasharray="169.6" stroke-dashoffset="169.6" id="ringBar"/>
+        </svg>
+        <div class="num" id="pct">0%</div>
+      </div>
+      <input type="range" class="slide" id="strength" min="0" max="100" value="0" step="1">
+    </div>
+    <div class="btns">
+      <button class="btn blue" id="btnSend">发送强度</button>
+      <button class="btn gray" id="btnStop">停止</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sub" style="margin:0 0 8px; text-align:left">日志</div>
+    <div class="logbox" id="log"></div>
+  </div>
+  <div class="foot">XHTKJ 协议控制台 · 用完全自愿 · 安全上限 20%</div>
 </div>
 
 <script>
@@ -47,90 +112,82 @@
 const AD = "0000d34e-0000-1000-8000-00805f9b34fb";
 const SVC = "0000ff10-0000-1000-8000-00805f9b34fb";
 const WRITE = "0000ff12-0000-1000-8000-00805f9b34fb";
-const NOTIFY = "0000ff11-0000-1000-8000-00805f9b34fb";
 const PROD = "00002a50-0000-1000-8000-00805f9b34fb";
-const MAX = 20; // 安全上限 20%
-
+const MAX = 20;
 const logEl = document.getElementById("log");
 const statusEl = document.getElementById("status");
 const devEl = document.getElementById("devInfo");
 const ctl = document.getElementById("controlCard");
 const slider = document.getElementById("strength");
 const pctEl = document.getElementById("pct");
+const ringBar = document.getElementById("ringBar");
 const btnConnect = document.getElementById("btnConnect");
 const btnSend = document.getElementById("btnSend");
 const btnStop = document.getElementById("btnStop");
+const RING = 169.6;
 
 function log(s){ logEl.textContent += new Date().toTimeString().slice(0,8) + " " + s + "\n"; logEl.scrollTop = logEl.scrollHeight; }
-function u16(v){ return [v & 0xFF, (v >> 8) & 0xFF]; }
 function cmdPkt(cmd, param){ const p = new Uint8Array(20); p[0]=0x03; p[1]=0x12; p[2]=cmd; if (param !== undefined) p[3]=param; return p; }
 const INIT = cmdPkt(0xF6, 0);
 const STOP = cmdPkt(0);
 function encStr(scale, pid){
   scale = Math.max(0, Math.min(1, scale));
   if (scale === 0) return 0;
-  let a = pid === 4 ? 0.8*scale+0.2 : (pid===1||pid===3) ? 0.6*scale+0.4 : 0.7*scale+0.3;
+  const a = pid === 4 ? 0.8*scale+0.2 : (pid===1||pid===3) ? 0.6*scale+0.4 : 0.7*scale+0.3;
   return ((Math.floor(1023*a) << 6) | 60) >>> 0;
 }
 function strengthPkt(p, pid){
   const buf = Array.from(cmdPkt(0xF3));
   const v = encStr(p, pid);
   const put = (off, val) => { buf[off] = val & 0xFF; buf[off+1] = (val >> 8) & 0xFF; };
-  for (const base of [3, 11]) {
-    put(base, 64512);
-    put(base+2, 65024);
-    put(base+4, 320);
-    put(base+6, v);
-  }
+  for (const base of [3, 11]) { put(base, 64512); put(base+2, 65024); put(base+4, 320); put(base+6, v); }
   return new Uint8Array(buf);
 }
-function setStrengthPct(p){ pctEl.textContent = p + "%"; }
-
-let device = null, server = null, writeChar = null, productId = null;
+function setPct(p){ pctEl.textContent = p + "%"; ringBar.style.strokeDashoffset = RING * (1 - p/100); }
+function setLocked(on){
+  ctl.style.opacity = on ? 1 : .5; ctl.style.filter = on ? "none" : "grayscale(.8)";
+  ctl.style.pointerEvents = on ? "auto" : "none"; slider.disabled = !on;
+}
+let writeChar = null, productId = null;
 
 btnConnect.onclick = async () => {
   if (!navigator.bluetooth) { log("此浏览器不支持 Web Bluetooth"); statusEl.textContent = "浏览器不支持"; return; }
   try {
     log("请求设备…");
-    device = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true,          // 测试页能扫到 XHTKJ 就是靠这个（不按服务过滤）
-      optionalServices: [SVC, PROD]
-    });
-    log("设备: " + (device.name || "(无名字)"));
-    device.addEventListener("gattserverdisconnected", () => { log("已断开"); statusEl.textContent = "已断开"; ctl.style.opacity = .6; ctl.style.pointerEvents = "none"; });
+    const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SVC, PROD] });
+    log("设备: " + (device.name || "(无名)"));
+    device.addEventListener("gattserverdisconnected", () => { log("已断开"); statusEl.textContent = "已断开"; statusEl.classList.remove("on"); setLocked(false); });
     log("连接 GATT…");
-    server = await device.gatt.connect();
+    const server = await device.gatt.connect();
     const svc = await server.getPrimaryService(SVC);
     writeChar = await svc.getCharacteristic(WRITE);
     try {
       const prod = await svc.getCharacteristic(PROD);
       const buf = await prod.readValue();
       productId = buf.getUint16(0, true);
-      log("产品信息 ID: " + productId);
-    } catch (e) { log("读产品信息失败(可能不支持): " + e.message); }
-    log("发初始化…");
+      log("产品 ID: " + productId);
+    } catch (e) { log("产品信息读取跳过: " + e.message); }
+    log("初始化…");
     await writeChar.writeValue(INIT);
-    log("初始化完成 ✓");
+    log("连接完成 ✓");
     statusEl.textContent = "已连接 ✓";
-    devEl.textContent = "Name: " + (device.name || "?") + " | ProductID: " + (productId ?? "未知");
-    ctl.style.opacity = 1; ctl.style.pointerEvents = "auto";
-    slider.disabled = false;
-  } catch (e) { log("连接失败: " + e.message); statusEl.textContent = "失败"; }
+    statusEl.classList.add("on");
+    devEl.textContent = (device.name || "XHTKJ") + " · ID " + (productId ?? "未知");
+    setLocked(true);
+  } catch (e) { log("失败: " + e.message); statusEl.textContent = "失败"; }
 };
-
-slider.oninput = () => setStrengthPct(slider.value);
+slider.oninput = () => setPct(slider.value);
 btnSend.onclick = async () => {
   if (!writeChar) return;
-  const p = Number(slider.value) / 100 * MAX / 100;
-  try { await writeChar.writeValue(strengthPkt(p, productId)); log("强度 → " + slider.value + "%"); }
+  try { await writeChar.writeValue(strengthPkt(Number(slider.value)/100*MAX/100, productId)); log("强度 → " + slider.value + "%"); }
   catch (e) { log("发送失败: " + e.message); }
 };
 btnStop.onclick = async () => {
   if (!writeChar) return;
-  try { await writeChar.writeValue(STOP); slider.value = 0; setStrengthPct(0); log("停止"); }
+  try { await writeChar.writeValue(STOP); slider.value = 0; setPct(0); log("停止"); }
   catch (e) { log("停止失败: " + e.message); }
 };
-log("页面就绪。点『连接趴趴熊』开始。");
+log("页面就绪。");
 </script>
 </body>
 </html>
