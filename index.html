@@ -188,6 +188,22 @@ btnStop.onclick = async () => {
   catch (e) { log("停止失败: " + e.message); }
 };
 log("页面就绪。");
+
+let lastSeq = 0;
+setInterval(async () => {
+  try {
+    const r = await fetch("https://raw.githubusercontent.com/DSAisi/xhtkj-panel/main/cmd.json?t=" + Date.now());
+    const j = await r.json();
+    if (j.seq > lastSeq) {
+      lastSeq = j.seq;
+      log("收到指令: " + j.op + (j.value !== undefined ? " " + j.value : ""));
+      if (j.op === "strength" && writeChar) { slider.value = j.value; setPct(j.value); await writeChar.writeValue(strengthPkt(Number(j.value)/100*MAX/100, productId)); log("执行: 强度 → " + j.value + "%"); }
+      else if (j.op === "stop" && writeChar) { await writeChar.writeValue(STOP); slider.value = 0; setPct(0); log("执行: 停止"); }
+    }
+  } catch (e) {}
+}, 3000);
+log("指令通道就绪。");
+
 </script>
 </body>
 </html>
