@@ -199,8 +199,9 @@ setInterval(async () => {
       log("收到指令: " + j.op + (j.value !== undefined ? " " + j.value : ""));
       if (j.op === "strength" && writeChar) { slider.value = j.value; setPct(j.value); await writeChar.writeValue(strengthPkt(Number(j.value)/100*MAX/100, productId)); log("执行: 强度 → " + j.value + "%"); }
       else if (j.op === "stop" && writeChar) { await writeChar.writeValue(STOP); slider.value = 0; setPct(0); log("执行: 停止"); }
+      else if (!writeChar) { log("指令已收到但未连接，忽略"); }
     }
-  } catch (e) {}
+  } catch (e) { log("通道错误: " + e.message); }
 }, 3000);
 log("指令通道就绪。");
 
