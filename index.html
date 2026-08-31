@@ -223,7 +223,7 @@ const toD = "ds-toy-a4k9x-toD", toHer = "ds-toy-a4k9x-toHer";
 const chatlog = document.getElementById("chatlog");
 const chatInput = document.getElementById("chatInput");
 const chatSend = document.getElementById("chatSend");
-let chatLastT = Math.floor(Date.now()/1000) - 60;
+let chatLastT = Math.floor(Date.now()/1000) - 300;
 function chatAdd(cls, txt){ const d = document.createElement("div"); d.className = cls; d.textContent = txt; chatlog.appendChild(d); chatlog.scrollTop = chatlog.scrollHeight; }
 async function sendChat(){
   const t = chatInput.value.trim();
@@ -240,7 +240,8 @@ setInterval(async () => {
     const r = await fetch("https://ntfy.sh/" + toHer + "/json?poll=1&since=" + chatLastT);
     if (r.ok) {
       const j = await r.json();
-      if (j && j.message) { chatAdd("hers", j.message); chatLastT = Math.max(chatLastT, j.time || 0) + 1; }
+      const list = Array.isArray(j) ? j : [j];
+      for (const m of list) { if (m && m.message && (m.time || 0) >= chatLastT) { chatAdd("hers", m.message); chatLastT = Math.max(chatLastT, m.time || 0) + 1; } }
     }
   } catch (e) {}
 }, 4000);
