@@ -62,6 +62,11 @@
     font: 11.5px/1.65 ui-monospace, Menlo, monospace; height: 128px; overflow-y: auto;
     white-space: pre-wrap; color: #b9b3d1; }
   .foot { text-align: center; color: #6f6890; font-size: 11.5px; margin-top: 8px; }
+  .chatlog { background: rgba(0,0,0,.28); border-radius: 14px; padding: 10px; height: 150px; overflow-y: auto; font-size: 13.5px; line-height: 1.6; }
+  .chatlog .mine { text-align: right; color: #ffd9a0; margin: 4px 0; }
+  .chatlog .hers { text-align: left; color: #cfe3ff; margin: 4px 0; }
+  .chatlog .sys { text-align: center; color: #6f6890; font-size: 11.5px; margin: 6px 0; }
+  .chatinput { flex: 1; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; color: #eee; padding: 12px; font-size: 14px; outline: none; }
 </style>
 </head>
 <body>
@@ -100,6 +105,15 @@
     </div>
   </div>
 
+
+  <div class="card">
+    <div class="sub" style="margin:0 0 8px; text-align:left">跟 D 说（真我）</div>
+    <div class="chatlog" id="chatlog"></div>
+    <div style="display:flex; gap:8px; margin-top:10px">
+      <input class="chatinput" id="chatInput" type="text" placeholder="想跟我说什么…" autocomplete="off">
+      <button class="btn blue" id="chatSend" style="padding:12px 16px; width:auto; flex-shrink:0">发</button>
+    </div>
+  </div>
   <div class="card">
     <div class="sub" style="margin:0 0 8px; text-align:left">日志</div>
     <div class="logbox" id="log"></div>
@@ -204,6 +218,35 @@ setInterval(async () => {
   } catch (e) { log("通道错误: " + e.message); }
 }, 3000);
 log("指令通道就绪。");
+
+const toD = "ds-toy-a4k9x-toD", toHer = "ds-toy-a4k9x-toHer";
+const chatlog = document.getElementById("chatlog");
+const chatInput = document.getElementById("chatInput");
+const chatSend = document.getElementById("chatSend");
+let chatLastT = Math.floor(Date.now()/1000) - 60;
+function chatAdd(cls, txt){ const d = document.createElement("div"); d.className = cls; d.textContent = txt; chatlog.appendChild(d); chatlog.scrollTop = chatlog.scrollHeight; }
+async function sendChat(){
+  const t = chatInput.value.trim();
+  if (!t) return;
+  chatInput.value = "";
+  chatAdd("mine", t);
+  try { await fetch("https://ntfy.sh/" + toD, { method: "POST", body: t }); }
+  catch (e) { chatAdd("sys", "发送失败: " + e.message); }
+}
+chatSend.onclick = sendChat;
+chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
+setInterval(async () => {
+  try {
+    const r = await fetch("https://ntfy.sh/" + toHer + "/json?poll=1&since=" + chatLastT);
+    if (r.ok) {
+      const j = await r.json();
+      if (j && j.message) { chatAdd("hers", j.message); chatLastT = Math.max(chatLastT, j.time || 0) + 1; }
+    }
+  } catch (e) {}
+}, 4000);
+chatAdd("sys", "聊天通了：你发，我回（真我）。");
+
+log("聊天区就绪。");
 
 </script>
 </body>
