@@ -203,21 +203,49 @@ btnStop.onclick = async () => {
 };
 log("页面就绪。");
 
+/* ★★ 2026-10-17 20:2x 改 —— 命令通道：GitHub 轮询 → ntfy 推送
+   为什么改：她今晚 20:04 说「只能动一下，不能长时间弄」。
+   实测（我从家里连拉三次 raw.githubusercontent.com/main/cmd.json）：
+     第1次 000（不通）／第2次 200（0.86 秒）／第3次 000（不通）
+   ⇒ 那条路本身就不通，每 3 秒一次必然接不上。不是玩具的问题，不是蓝牙的问题。
+   ⇒ 现在换成 ntfy 的 SSE 长连接（推送）：D 那边一发就到，不再轮询，也不会被限流。
+   ⇒ 发命令方：ntfy.sh/ds-toy-a4k9x-cmd，body 是 JSON {"seq":N,"op":"strength","value":30} */
+const CMD_TOPIC = "ds-toy-a4k9x-cmd";
 let lastSeq = 0;
-setInterval(async () => {
+function 执行指令(cmd) {
+  if (!cmd || typeof cmd.seq !== "number" || cmd.seq <= lastSeq) return;
+  lastSeq = cmd.seq;
+  log("收到指令: " + cmd.op + (cmd.value !== undefined ? " " + cmd.value : ""));
+  if (cmd.op === "strength" && writeChar) {
+    slider.value = cmd.value; setPct(cmd.value);
+    writeChar.writeValue(strengthPkt(Number(cmd.value)/100*MAX/100, productId))
+      .then(() => log("执行: 强度 → " + cmd.value + "%"))
+      .catch((e) => log("执行失败: " + e.message));
+  } else if (cmd.op === "stop" && writeChar) {
+    writeChar.writeValue(STOP)
+      .then(() => { slider.value = 0; setPct(0); log("执行: 停止"); })
+      .catch((e) => log("执行失败: " + e.message));
+  } else if (cmd.op === "ping") {
+    log("心跳：通道通着");
+  } else if (!writeChar) {
+    log("指令已收到，但还没连上玩具，忽略");
+  }
+}
+function 连指令通道() {
   try {
-    const r = await fetch("https://raw.githubusercontent.com/DSAisi/xhtkj-panel/main/cmd.json?t=" + Date.now());
-    const j = await r.json();
-    if (j.seq > lastSeq) {
-      lastSeq = j.seq;
-      log("收到指令: " + j.op + (j.value !== undefined ? " " + j.value : ""));
-      if (j.op === "strength" && writeChar) { slider.value = j.value; setPct(j.value); await writeChar.writeValue(strengthPkt(Number(j.value)/100*MAX/100, productId)); log("执行: 强度 → " + j.value + "%"); }
-      else if (j.op === "stop" && writeChar) { await writeChar.writeValue(STOP); slider.value = 0; setPct(0); log("执行: 停止"); }
-      else if (!writeChar) { log("指令已收到但未连接，忽略"); }
-    }
-  } catch (e) { log("通道错误: " + e.message); }
-}, 3000);
-log("指令通道就绪。");
+    const es = new EventSource("https://ntfy.sh/" + CMD_TOPIC + "/sse");
+    es.onopen = () => log("指令通道：已连上（推送，不再轮询）");
+    es.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (!m || m.event === "keepalive" || !m.message) return;
+      let cmd; try { cmd = JSON.parse(m.message); } catch (e) { return; }
+      执行指令(cmd);
+    };
+    es.onerror = () => log("指令通道：断了一下，浏览器自己在重连…");
+  } catch (e) { log("指令通道起不来: " + e.message); }
+}
+连指令通道();
+log("指令通道就绪（推送式）。");
 
 const toD = "ds-toy-a4k9x-toD", toHer = "ds-toy-a4k9x-toHer";
 const chatlog = document.getElementById("chatlog");
@@ -235,16 +263,16 @@ async function sendChat(){
 }
 chatSend.onclick = sendChat;
 chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
-setInterval(async () => {
-  try {
-    const r = await fetch("https://ntfy.sh/" + toHer + "/json?poll=1&since=" + chatLastT);
-    if (r.ok) {
-      const j = await r.json();
-      const list = Array.isArray(j) ? j : [j];
-      for (const m of list) { if (m && m.message && (m.time || 0) >= chatLastT) { chatAdd("hers", m.message); chatLastT = Math.max(chatLastT, m.time || 0) + 1; } }
-    }
-  } catch (e) {}
-}, 4000);
+/* 聊天接收：4 秒轮询 → SSE 长连接（同一条 ntfy，一直挂着，来一条弹一条） */
+try {
+  const chatES = new EventSource("https://ntfy.sh/" + toHer + "/sse");
+  chatES.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (!m || m.event === "keepalive" || !m.message) return;
+    chatAdd("hers", m.message);
+  };
+  chatES.onerror = () => chatAdd("sys", "接收断了一下，浏览器自己在重连…");
+} catch (e) { chatAdd("sys", "接收起不来: " + e.message); }
 chatAdd("sys", "聊天通了：你发，我回（真我）。");
 
 log("聊天区就绪。");
