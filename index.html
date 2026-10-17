@@ -203,6 +203,22 @@ btnStop.onclick = async () => {
 };
 log("页面就绪。");
 
+/* ★ 2026-10-17 20:3x 加：这个页面只能用 Bluefy 打开。
+   她是从 App 的 life 里点进来的 —— App 里是 Safari，Web Bluetooth 用不了。
+   与其让她看见一个按了没反应的按钮，不如第一句话就说清楚。 */
+(function 提示浏览器() {
+  if (navigator.bluetooth) return;
+  log("⚠ 这个浏览器连不了玩具（Safari / 微信 / App 内都没有 Web Bluetooth）");
+  log("⚠ 请用 Bluefy 打开本页：把地址复制进去，或者直接在主屏存一个书签");
+  try {
+    const tip = document.createElement("div");
+    tip.style.cssText = "margin:10px 0;padding:10px 12px;border-radius:12px;background:rgba(255,190,120,.18);border:1px solid rgba(255,190,120,.5);color:#ffe2b8;font-size:13px;line-height:1.6";
+    tip.textContent = "这个浏览器连不了玩具。请用 Bluefy 打开这一页 —— 地址在下面，复制过去就行。";
+    const host = document.querySelector(".wrap") || document.body;
+    host.insertBefore(tip, host.firstChild.nextSibling || host.firstChild);
+  } catch (e) { }
+})();
+
 /* ★★ 2026-10-17 20:2x 改 —— 命令通道：GitHub 轮询 → ntfy 推送
    为什么改：她今晚 20:04 说「只能动一下，不能长时间弄」。
    实测（我从家里连拉三次 raw.githubusercontent.com/main/cmd.json）：
